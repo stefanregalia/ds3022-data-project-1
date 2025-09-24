@@ -1,35 +1,12 @@
 #!/usr/bin/env python3
-"""
-load.py
--------
-Load NYC TLC trip data (Yellow & Green, 2015–2024) into DuckDB, plus a small
-vehicle emissions lookup table from CSV. Programmatic, resume-safe, and polite
-to the NYC TLC CDN (rate limited).
 
-Tables created (max 3):
-  - raw_yellow_all
-  - raw_green_all
-  - vehicle_emissions
-
-Env vars (optional):
-  DB_PATH=/path/to/emissions.duckdb
-  SLEEP_SECONDS=30              # pause between months (string -> float)
-  RESUME_FROM_YELLOW=YYYY-MM    # e.g. "2016-09"
-  RESUME_FROM_GREEN=YYYY-MM     # e.g. "2015-01"
-  DUCKDB_TEMP_DIR=/big/drive/tmp_duckdb   # optional: move temp to large disk
-
-Run:
-  $ python load.py
-"""
-
+# Importing libraries
 import time
 import duckdb
 import logging
 import os
 
-# ------------------------------------------------------------------------------
-# Logging
-# ------------------------------------------------------------------------------
+ # Logging setup
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
@@ -37,17 +14,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ------------------------------------------------------------------------------
-# Config
-# ------------------------------------------------------------------------------
-DB_PATH = os.environ.get("DB_PATH", "emissions.duckdb")
+# Configuration from environment variables
+DB_PATH = os.environ.get("DB_PATH", "emissions.duckdb") # default DB path
 SLEEP_SECONDS = float(os.environ.get("SLEEP_SECONDS", "30.0"))  # configurable delay
 
-# Years/months to load (2015–2024 inclusive)
+# Years/months to load (2015–2024)
 YEARS  = list(range(2015, 2025))
 MONTHS = [f"{m:02d}" for m in range(1, 13)]
 
-# Per-table resume points (optional)
+# Per-table resume points (YYYY-MM format) - set to skip earlier months when pausing the data loading because of lost connection
 RESUME_FROM_YELLOW = os.environ.get("RESUME_FROM_YELLOW")
 RESUME_FROM_GREEN  = os.environ.get("RESUME_FROM_GREEN")
 
@@ -55,17 +30,17 @@ RESUME_FROM_GREEN  = os.environ.get("RESUME_FROM_GREEN")
 YELLOW_URL = "https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_{yyyy}-{mm}.parquet"
 GREEN_URL  = "https://d37ci6vzurychx.cloudfront.net/trip-data/green_tripdata_{yyyy}-{mm}.parquet"
 
-# Pause/Stop flags (create these files in the project folder while it runs)
+# Pause/Stop flags for interactive control
 PAUSE_FILE = "PAUSE.LOAD"
 STOP_FILE  = "STOP.LOAD"
 
 def _maybe_pause():
-    # Pause only between months (safe point)
+    # Pause between each file (every month)
     while os.path.exists(PAUSE_FILE):
         logger.info("PAUSED: remove PAUSE.LOAD to continue…")
         time.sleep(3)
 
-# Columns to keep (trim to reduce DB size)
+# Columns to keep (trimmed to reduce DB size and speed up queries)
 COMMON_KEEP_COLS = [
     "VendorID",
     "passenger_count",
@@ -101,9 +76,9 @@ TYPE_MAP_BASE = {
     "total_amount": "DOUBLE",
     "congestion_surcharge": "DOUBLE",
     "airport_fee": "DOUBLE",
-    # timestamps added per table below
 }
 
+# Timestamps added per table below
 def _keep_cols_for(table_name: str):
     if "yellow" in table_name:
         ts_pick = "tpep_pickup_datetime"
@@ -114,6 +89,7 @@ def _keep_cols_for(table_name: str):
     keep = [ts_pick, ts_drop] + COMMON_KEEP_COLS
     return keep, ts_pick  # also return pickup col
 
+# Maps timestamp columns per table
 def _type_map_for(table_name: str):
     tmap = dict(TYPE_MAP_BASE)
     if "yellow" in table_name:
@@ -124,6 +100,7 @@ def _type_map_for(table_name: str):
         tmap["lpep_dropoff_datetime"] = "TIMESTAMP"
     return tmap
 
+# Table schema management, in case a table shows an error on insert
 def _ensure_table_schema(con: duckdb.DuckDBPyConnection, table_name: str, keep_cols, type_map):
     """
     Create the table if it doesn't exist with all keep_cols and our desired types.
@@ -140,12 +117,13 @@ def _ensure_table_schema(con: duckdb.DuckDBPyConnection, table_name: str, keep_c
         con.execute(f'CREATE TABLE {table_name} ({cols_def});')
         return
 
-    # Add any missing keep columns (DuckDB PRAGMA table_info: column name at index 1)
+    # Adding any missing keep columns (DuckDB PRAGMA table_info: column name at index 1)
     present = {row[1] for row in con.execute(f"PRAGMA table_info('{table_name}')").fetchall()}
     for c in keep_cols:
         if c not in present:
             con.execute(f'ALTER TABLE {table_name} ADD COLUMN "{c}" {type_map[c]};')
 
+# Build a SELECT list that projects only keep_cols in the right order.
 def _build_projection_for_file(con: duckdb.DuckDBPyConnection, url: str, keep_cols, type_map) -> str:
     """
     Build a SELECT list that projects only keep_cols in the right order.
@@ -161,9 +139,7 @@ def _build_projection_for_file(con: duckdb.DuckDBPyConnection, url: str, keep_co
             exprs.append(f'CAST(NULL AS {type_map[c]}) AS "{c}"')
     return ", ".join(exprs)
 
-# ------------------------------------------------------------------------------
-# Connection helper
-# ------------------------------------------------------------------------------
+# DuckDB connection setup
 def _connect() -> duckdb.DuckDBPyConnection:
     con = duckdb.connect(database=DB_PATH, read_only=False)
     con.execute("INSTALL httpfs;")
@@ -172,7 +148,7 @@ def _connect() -> duckdb.DuckDBPyConnection:
     con.execute("PRAGMA enable_object_cache=true;")
     con.execute("SET http_keep_alive=true;")
 
-    # Optional: move temp files to a larger disk
+    # If running out of storage, move temp files to a different directory
     tmp_dir = os.environ.get("DUCKDB_TEMP_DIR")
     if tmp_dir:
         os.makedirs(tmp_dir, exist_ok=True)
@@ -183,9 +159,8 @@ def _connect() -> duckdb.DuckDBPyConnection:
     print(f"Using DB_PATH={DB_PATH} (DuckDB {version})")
     return con
 
-# ------------------------------------------------------------------------------
 # Rate-limited, sequential inserter (resume-safe + trimmed columns)
-# ------------------------------------------------------------------------------
+
 def _insert_rate_limited(
     con: duckdb.DuckDBPyConnection,
     table_name: str,
@@ -267,22 +242,20 @@ def _insert_rate_limited(
         logger.warning(f"{table_name}: skipped months: {skipped}")
         print(f"{table_name}: skipped {len(skipped)} months (first few: {skipped[:6]})")
 
-# ------------------------------------------------------------------------------
 # Yellow / Green loaders
-# ------------------------------------------------------------------------------
+
 def load_yellow(con: duckdb.DuckDBPyConnection) -> None:
     _insert_rate_limited(con, "raw_yellow_all", YELLOW_URL, sleep_seconds=SLEEP_SECONDS)
 
 def load_green(con: duckdb.DuckDBPyConnection) -> None:
     _insert_rate_limited(con, "raw_green_all", GREEN_URL, sleep_seconds=SLEEP_SECONDS)
 
-# ------------------------------------------------------------------------------
 # Vehicle emissions loader (CSV -> normalized 2-column lookup)
-# ------------------------------------------------------------------------------
+
 def load_vehicle_emissions(con: duckdb.DuckDBPyConnection) -> None:
     """
     Load data/vehicle_emissions.csv into a simple lookup table
-    with two rows: yellow and green (averaged if dup rows exist).
+    with two rows: yellow and green taxis and their average CO2 grams/mile.
     """
     logger.info("Loading vehicle_emissions from data/vehicle_emissions.csv")
     con.execute("DROP TABLE IF EXISTS vehicle_emissions;")
@@ -309,9 +282,8 @@ def load_vehicle_emissions(con: duckdb.DuckDBPyConnection) -> None:
     """)
     logger.info("vehicle_emissions loaded")
 
-# ------------------------------------------------------------------------------
 # Basic summarization (raw row counts)
-# ------------------------------------------------------------------------------
+
 def summarize(con: duckdb.DuckDBPyConnection) -> None:
     def _count(tbl: str) -> int:
         try:
@@ -331,9 +303,8 @@ def summarize(con: duckdb.DuckDBPyConnection) -> None:
     print(f"raw_green_all rows:  {g:,}")
     print(f"vehicle_emissions rows: {e:,}")
 
-# ------------------------------------------------------------------------------
 # Main
-# ------------------------------------------------------------------------------
+
 def main() -> None:
     con = None
     try:
