@@ -1,0 +1,11 @@
+*.duckdb
+*.duckdb.wal
+.parquet
+logs/
+*.log
+*.png
+*.jpg
+*.gif
+__pycache__/
+.dbt/
+target/
