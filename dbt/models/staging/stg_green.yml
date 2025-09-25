@@ -1,0 +1,19 @@
+version: 2
+
+models:
+  - name: stg_green
+    columns:
+      - name: pickup_ts
+        tests: [not_null]
+      - name: dropoff_ts
+        tests: [not_null]
+      - name: trip_distance
+        tests: [not_null]
+      - name: passenger_count
+        tests: [not_null]
+      - name: taxi_type
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['GREEN']

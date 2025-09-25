@@ -228,7 +228,7 @@ def verify_one(con: duckdb.DuckDBPyConnection, tbl: str, is_yellow: bool):
         if count != 0:
             all_ok = False
 
-    status = "CLEAN PASSED" if all_ok else "CLEAN FAILED (see counts above)"
+    status = "CLEAN PASSED" if all_ok else "CLEAN FAILED"
     print(status)
     logger.info(status)
     logger.info(f"END verification for table={tbl}")
@@ -241,11 +241,11 @@ def main():
         con = _connect()
         logger.info(f"Connected to DuckDB at {DB_PATH}")
 
-        print("\n=== Cleaning YELLOW ===")
+        print("\nCleaning YELLOW")
         logger.info("Starting cleaning for YELLOW")
         clean_one(con, YELLOW_RAW, YELLOW_CLEAN)
 
-        print("\n=== Cleaning GREEN ===")
+        print("\nCleaning GREEN")
         logger.info("Starting cleaning for GREEN")
         clean_one(con, GREEN_RAW, GREEN_CLEAN)
 

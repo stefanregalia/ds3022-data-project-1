@@ -1,0 +1,10 @@
+version: 2 # Version number for dbt schema files
+
+# Defining sources, including 3 tables from duckdb database
+sources:
+  - name: raw
+    schema: main
+    tables:
+      - name: yellow_clean
+      - name: green_clean
+      - name: vehicle_emissions
