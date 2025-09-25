@@ -1,4 +1,4 @@
-#!/Users/stefanregalia/Desktop/ds3022-data-project-1/.venv/bin/python
+#!/Users/stefanregalia/Desktop/ds3022-data-project-1/.venv/bin/python3.13
 # -*- coding: utf-8 -*-
 import re
 import sys
