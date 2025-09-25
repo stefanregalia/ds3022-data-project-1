@@ -1,0 +1,44 @@
+version: 2
+
+models:
+  - name: fct_trips_enriched
+    description: Union of yellow and green trips with derived metrics for 2015–2024.
+    columns:
+      - name: taxi_type
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['YELLOW', 'GREEN']
+
+      - name: pickup_ts
+        tests: [not_null]
+
+      - name: dropoff_ts
+        tests: [not_null]
+
+      - name: trip_distance
+        tests: [not_null]
+
+      - name: passenger_count
+        tests: [not_null]
+
+      - name: trip_duration_minutes
+        tests: [not_null]
+
+      - name: avg_mph
+        tests: [not_null]
+
+      - name: trip_co2_kgs
+        tests: [not_null]
+
+      - name: hour_of_day
+        tests: [not_null]
+
+      - name: day_of_week
+        tests: [not_null]
+
+      - name: week_of_year
+        tests: [not_null]
+
+      - name: month_of_year
+        tests: [not_null]

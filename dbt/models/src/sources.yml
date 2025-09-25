@@ -1,10 +1,21 @@
+# Defining sources, including 3 tables from duckdb database
+
 version: 2 # Version number for dbt schema files
 
-# Defining sources, including 3 tables from duckdb database
 sources:
-  - name: raw
+  - name: raw            
     schema: main
     tables:
-      - name: yellow_clean
-      - name: green_clean
+      - name: yellow_trips   
+      - name: green_trips    
+
+  - name: lookup
+    schema: main            
+    tables:
       - name: vehicle_emissions
+        description: Per-mile CO2 (grams/mile) by taxi_type.
+        columns:
+          - name: taxi_type
+            tests: [not_null]
+          - name: co2_grams_per_mile
+            tests: [not_null]
