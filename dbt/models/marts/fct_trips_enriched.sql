@@ -1,4 +1,5 @@
 -- models/marts/fct_trips_enriched.sql
+-- Inserted columns are all in this table
 
 {{ config(materialized='view') }}
 
