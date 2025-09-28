@@ -259,7 +259,7 @@ def main():
         print(summary)
         logger.info(summary)
 
-        # Verification checklists (screen + log)
+        # Verification checklists
         verify_one(con, YELLOW_CLEAN, is_yellow=True)
         verify_one(con, GREEN_CLEAN,  is_yellow=False)
 

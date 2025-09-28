@@ -187,7 +187,7 @@ def _insert_rate_limited(
                 print("STOP requested — exiting after current checkpoint.")
                 return
 
-            _maybe_pause()  # optional pause between months
+            _maybe_pause()  # Pause between months
 
             # Per-table resume gate
             resume_from = RESUME_FROM_YELLOW if "yellow" in table_name else RESUME_FROM_GREEN
@@ -209,7 +209,7 @@ def _insert_rate_limited(
                 # Build projection (NULL casts for missing columns in this file)
                 select_list = _build_projection_for_file(con, url, keep_cols, type_map)
 
-                # Idempotency: remove any previously inserted rows for this month
+                # Remove any previously inserted rows for this month
                 con.execute(f"""
                     DELETE FROM {table_name}
                     WHERE "{pickup_col}" >= DATE '{month_start}'
@@ -250,7 +250,7 @@ def load_yellow(con: duckdb.DuckDBPyConnection) -> None:
 def load_green(con: duckdb.DuckDBPyConnection) -> None:
     _insert_rate_limited(con, "raw_green_all", GREEN_URL, sleep_seconds=SLEEP_SECONDS)
 
-# Vehicle emissions loader (CSV -> normalized 2-column lookup)
+# Vehicle emissions loader
 
 def load_vehicle_emissions(con: duckdb.DuckDBPyConnection) -> None:
     """

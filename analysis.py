@@ -8,6 +8,8 @@ analysis.py — Final analysis for NYC Taxi CO₂ (2015–2024)
 - Clear logging + timings, plot saved to plots/monthly_co2_by_type.png
 """
 
+# Importing necessary libraries
+
 import os
 import time
 import logging
@@ -17,9 +19,9 @@ import duckdb
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# -----------------------------
-# Config
-# -----------------------------
+
+# Configurations
+
 DB_PATH = "emissions.duckdb"
 if not os.path.exists(DB_PATH):
     raise FileNotFoundError(f"Expected DuckDB at {DB_PATH}")
@@ -32,9 +34,8 @@ PLOT_FILE = PLOT_DIR / "monthly_co2_by_type.png"
 START_TS = "2015-01-01"
 END_TS   = "2025-01-01"
 
-# -----------------------------
 # Logging
-# -----------------------------
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
@@ -42,6 +43,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Helper functions
 def sizeof_fmt(num: int, suffix="B") -> str:
     for unit in ["","K","M","G","T","P","E","Z"]:
         if abs(num) < 1024.0:
@@ -49,6 +51,7 @@ def sizeof_fmt(num: int, suffix="B") -> str:
         num /= 1024.0
     return f"{num:.1f} Y{suffix}"
 
+# Qualify table name with schema
 def _qualify_table(con, table_name: str) -> str:
     q = con.execute("""
         SELECT table_schema, table_name
@@ -61,6 +64,7 @@ def _qualify_table(con, table_name: str) -> str:
         raise RuntimeError(f"Could not find table named '{table_name}' in DuckDB.")
     return f"{q.loc[0,'table_schema']}.\"{q.loc[0,'table_name']}\""
 
+# Day-of-week label helper
 def _dow_label(x):
     labels = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"]
     try:
@@ -73,12 +77,15 @@ def _dow_label(x):
         pass
     return str(x)
 
+# Format integer or NA
 def _fmt_int(x):
     return "NA" if pd.isna(x) else str(int(x))
 
+# Print and log
 def print_and_log(msg: str):
     print(msg); logger.info(msg)
 
+# Run a query with timing and logging
 def run_query(con, label: str, sql: str, params=None) -> pd.DataFrame:
     print_and_log(f"START: {label}")
     t0 = time.perf_counter()
@@ -87,6 +94,7 @@ def run_query(con, label: str, sql: str, params=None) -> pd.DataFrame:
     print_and_log(f"END:   {label} | {dt:0.2f}s | rows={len(df)}")
     return df
 
+# Main analysis function
 def main():
     # Connect
     db_size = sizeof_fmt(os.path.getsize(DB_PATH))
@@ -113,7 +121,7 @@ def main():
     table = _qualify_table(con, FACT_TABLE)
     print_and_log(f"Using table (enriched): {table}")
 
-    # Reusable core CTE (not materialized)
+    # Reusable core CTE 
     core_cte = f"""
         WITH core AS (
           SELECT
@@ -132,7 +140,7 @@ def main():
         )
     """
 
-    # 1) Largest carbon-producing trip (per taxi_type) — per-type Top-1
+    # Largest carbon-producing trip (per taxi_type)
     largest_rows = []
     for ttype in ("YELLOW", "GREEN"):
         largest_one_sql = core_cte + """
@@ -151,7 +159,7 @@ def main():
         largest_rows.append(df_one)
     largest = pd.concat(largest_rows, ignore_index=True)
 
-    # 2) Hour-of-day heavy/light (avg CO2 per trip)
+    # Hour-of-day heavy/light (avg CO2 per trip)
     hour_sql = core_cte + """
         , stats AS (
             SELECT taxi_type, hour_of_day AS hour, AVG(trip_co2_kgs) AS avg_co2
@@ -175,7 +183,7 @@ def main():
     """
     hour_stats = run_query(con, "Hour-of-day heavy/light (avg CO2 per trip)", hour_sql)
 
-    # 3) Day-of-week heavy/light (avg CO2 per trip)
+    # Day-of-week heavy/light (avg CO2 per trip)
     dow_sql = core_cte + """
         , stats AS (
             SELECT taxi_type, day_of_week AS dow, AVG(trip_co2_kgs) AS avg_co2
@@ -199,7 +207,7 @@ def main():
     """
     dow_stats = run_query(con, "Day-of-week heavy/light (avg CO2 per trip)", dow_sql)
 
-    # 4) Week-of-year heavy/light (avg CO2 per trip)
+    # Week-of-year heavy/light (avg CO2 per trip)
     woy_sql = core_cte + """
         , stats AS (
             SELECT taxi_type, week_of_year AS woy, AVG(trip_co2_kgs) AS avg_co2
@@ -223,7 +231,7 @@ def main():
     """
     woy_stats = run_query(con, "Week-of-year heavy/light (avg CO2 per trip)", woy_sql)
 
-    # 5) Month-of-year heavy/light (avg CO2 per trip)
+    # Month-of-year heavy/light (avg CO2 per trip)
     moy_sql = core_cte + """
         , stats AS (
             SELECT taxi_type, month_of_year AS moy, AVG(trip_co2_kgs) AS avg_co2
@@ -259,9 +267,9 @@ def main():
     """
     monthly = run_query(con, "Monthly CO2 totals by taxi type (for plotting)", monthly_totals_sql)
 
-    # -------------------------
-    # Output (labeled)
-    # -------------------------
+
+    # Output
+
     print_and_log("===== LARGEST CARBON-PRODUCING TRIP BY TAXI TYPE (2015–2024) =====")
     for _, r in largest.iterrows():
         print_and_log(
@@ -307,9 +315,8 @@ def main():
             f"({r['light_moy_avg_co2']:.4f} kg)"
         )
 
-    # -------------------------
     # Plot
-    # -------------------------
+
     if monthly.empty:
         print_and_log("No monthly data found to plot. Exiting before plot.")
         return
@@ -332,6 +339,7 @@ def main():
     plt.close()
     print_and_log(f"Saved plot to: {PLOT_FILE}")
 
+# Entry point
 if __name__ == "__main__":
     try:
         main()

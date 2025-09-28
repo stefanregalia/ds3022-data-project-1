@@ -1,36 +1,43 @@
+# ------------------------
+# DS3022 Data Project 1
+# ------------------------
 
+# DuckDB database files (forbidden in repo)
 *.duckdb
-*.duckdb.wal
-emissions.duckdb.tmp/
-duckdb_tmp/
-*.tmp
 
-*.parquet
-*.parquet.gz
-*.csv
-*.csv.gz
-
-logs/
+# Log files (each stage writes its own)
 *.log
 
-__pycache__/
-*.py[cod]
-*.pyo
+# Parquet data files (raw TLC inputs)
+*.parquet
+
+# Python virtual environments
 .venv/
-venv/
 env/
-pip-wheel-metadata/
-*.egg-info/
+venv/
 
+# Byte-compiled / cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pkl
 
-.dbt/
+# MacOS finder files
+.DS_Store
+
+# Jupyter notebook checkpoints
+.ipynb_checkpoints/
+
+# DBT local artifacts
+dbt_modules/
 target/
 
-.DS_Store
-.idea/
+# VS Code / IDE configs
 .vscode/
+.idea/
 
-*.jpg
-*.gif
-!plots/
-!plots/*.png
+# Temporary files
+*.tmp
+*.swp
+*.swo
